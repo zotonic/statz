@@ -75,14 +75,12 @@ update(Value, State) ->
                         true ->
                             State1 = State#state{
                                 n_events=NEvents,
-                                nums=incr_below(Value, State#state.nums),
                                 high_trending=HighTrending,
                                 new_nums=incr(Value, State#state.new_nums)
                             };
                         false ->
                             State1 = State#state{
                                 n_events=NEvents,
-                                nums=incr_below(Value, State#state.nums),
                                 high_trending=HighTrending
                             }
                     end,
@@ -95,10 +93,10 @@ update(Value, State) ->
                         n_events=NEvents,
                         nums=incr_below(Value, State#state.nums),
                         high_trending=HighTrending,
-                        n_above_max= case Value =< HighValue of 
+                        n_above_max=case Value =< HighValue of 
                                         true -> State#state.n_above_max;
                                         false -> State#state.n_above_max+1
-                                     end
+                                    end
                     }
             end;
         _ ->
@@ -145,6 +143,7 @@ new_high_values(State) ->
     [{NewHighVal,NewHighBelow}|NewNumsBelow] = zip_below(LastBelow, lists:sort(State#state.new_nums), []),
     NewNumsBelow1 = lists:reverse([{NewHighVal, NewHighBelow+State#state.n_above_max}| NewNumsBelow]),
     {NumsBeforeBelow,_} = lists:split(length(NewNumsBelow1), State#state.nums), 
+
     State#state{
         nums=NumsBeforeBelow++NewNumsBelow1,
         high_trending=false,
@@ -158,8 +157,10 @@ incr_below(V, Ns) ->
     
     incr_below(V, [{N,BelowN}|Ns], Acc) when V =< N ->
         incr_below(V, Ns, [{N,BelowN+1}|Acc]);
-    incr_below(_, Ns, Acc) ->
-        lists:reverse(Acc, Ns).
+    incr_below(V, [N|Ns], Acc) ->
+        incr_below(V, Ns, [N|Acc]);
+    incr_below(_, [], Acc) ->
+        lists:reverse(Acc).
 
 
 % Replace the sample count with the number of samples below the value.
