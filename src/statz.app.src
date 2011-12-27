@@ -1,0 +1,17 @@
+%% -*- mode: erlang; -*-
+
+{application, statz,
+ [
+  {description, "Statistics for Zotonic"},
+  {vsn, "0.1"},
+  {modules,
+   [
+   ]
+  },
+  {registered, [
+      statz_register
+  ]},
+  {applications, [kernel, stdlib]},
+  {mod, {statz, []}}
+ ]
+}.
