@@ -68,10 +68,11 @@ msec(Start, Name) ->
     msec(Start, now(), Name).
 
 msec(Start, End, Name) ->
-    statz_register:update(now_to_msec(End) - now_to_msec(Start), Name).
+    statz_register:update(now_to_usec100(End) - now_to_usec100(Start), Name).
 
-now_to_msec({Mega, Sec, Micro}) ->
-    Mega * 1000000000 + Sec * 1000 + Micro div 1000.
+% The time resolution is 100 microseconds (0.1msec)
+now_to_usec100({Mega, Sec, Micro}) ->
+    Mega * 10000000000 + Sec * 10000 + Micro div 100.
 
 
 summary(Name) ->
