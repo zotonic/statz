@@ -72,16 +72,16 @@ start_link(_Args) ->
 init([]) ->
     {ok, #state{
         is_value = false,
-        perc95 = percentile:new(95),
-        perc99 = percentile:new(99),
-        spiral = spiraltime:fresh(),
+        perc95 = statz_percentile:new(95),
+        perc99 = statz_percentile:new(99),
+        spiral = statz_spiraltime:fresh(),
         sample = basho_stats_sample:new()
     }}.
 
 
 
 handle_call(summary, _From, State) ->
-    {Secs, Mins, Hours, Days} = spiraltime:totals(State#state.spiral),
+    {{Secs, Mins, Hours, Days}, Spiral1} = statz_spiraltime:totals(State#state.spiral),
     Counters = [
         {second, Secs},
         {minute, Mins},
@@ -93,20 +93,21 @@ handle_call(summary, _From, State) ->
         true ->
             {Min, Mean, Max, Variance, Sdev} = basho_stats_sample:summary(State#state.sample),
             Reply = [
-                {perc95, percentile:percentile(State#state.perc95)},
-                {perc99, percentile:percentile(State#state.perc99)},
+                {perc95, statz_percentile:percentile(State#state.perc95)},
+                {perc99, statz_percentile:percentile(State#state.perc99)},
 
                 {min, Min},
                 {avg, Mean},
                 {max, Max},
                 {variance, Variance},
-                {sdev, Sdev}
+                {sdev, Sdev},
+                {count, basho_stats_sample:count(State#state.sample)}
                 | Counters
             ];
         false ->
             Reply = Counters
     end,
-    {reply, {ok, Reply}, State};
+    {reply, {ok, Reply}, State#state{spiral=Spiral1}};
 handle_call(Msg, _From, State) ->
     {stop, {uknown_call, Msg}, State}.
 
@@ -114,13 +115,13 @@ handle_call(Msg, _From, State) ->
 handle_cast({update, Value}, State) ->
     {noreply, State#state{
         is_value = true,
-        perc95 = percentile:update(Value, State#state.perc95),
-        perc99 = percentile:update(Value, State#state.perc99),
-        spiral = spiraltime:incr(Value, State#state.spiral),
+        perc95 = statz_percentile:update(Value, State#state.perc95),
+        perc99 = statz_percentile:update(Value, State#state.perc99),
+        spiral = statz_spiraltime:incr(Value, State#state.spiral),
         sample = basho_stats_sample:update(Value, State#state.sample)
     }};
 handle_cast(incr, State) ->
-    {noreply, State#state{spiral = spiraltime:incr(1, State#state.spiral)}};
+    {noreply, State#state{spiral = statz_spiraltime:incr(1, State#state.spiral)}};
 handle_cast(stop, State) ->
     {stop, normal, State};
 handle_cast(Msg, State) ->

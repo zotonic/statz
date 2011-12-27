@@ -28,8 +28,12 @@
 %% The goal is not to have "perfect" stats; post-fact log analysis is
 %% better for that.  The goal here is to have approximate running
 %% data useful for quick understanding of performance trends.
+%%
+%% 20111227 - Marc Worrell
+%% This is the old spiraltime with a week long stats.
+%% It is adapted to also record the count per entry.
 
--module(spiraltime).
+-module(statz_spiraltime).
 -author('Justin Sheehy <justin@basho.com>').
 -export([fresh/0,fresh/1,n/0,incr/2,incr/3,
          totals/1,
@@ -37,20 +41,20 @@
          test_spiraltime/0]).
 
 %% @type moment() = integer().
-%% This is a number of seconds, as produced by
-%% calendar:datetime_to_gregorian_seconds(calendar:universal_time())
+%% This is a number of seconds, as derived from now()
 
 %% @type count() = integer().
 %% The number of entries recorded in some time period.
 
 -record(spiral, {moment :: integer(),
-                 seconds :: [integer()],
-                 minutes :: [integer()],
-                 hours :: [integer()],
-                 days :: [integer()]}).
+                 seconds :: [{integer(), integer()}],
+                 minutes :: [{integer(), integer()}],
+                 hours :: [{integer(), integer()}],
+                 days :: [{integer(), integer()}]}).
 
 n() ->
-    calendar:datetime_to_gregorian_seconds(calendar:universal_time()).
+    {A,B,_C} = erlang:now(),
+    A*1000000 + B.
 
 %% @doc Create an empty spiral with which to begin recording entries.
 %% @spec fresh() -> spiral()
@@ -61,10 +65,10 @@ fresh() ->
 %% @spec fresh(moment()) -> spiral()
 fresh(Moment) ->
     #spiral{moment=Moment,
-            seconds=[0 || _ <- lists:seq(1,60)],
-            minutes=[0 || _ <- lists:seq(1,60)],
-            hours=[0 || _ <- lists:seq(1,24)],
-            days=[0 || _ <- lists:seq(1,7)]}.
+            seconds=[{0,0} || _ <- lists:seq(1,60)],
+            minutes=[{0,0} || _ <- lists:seq(1,60)],
+            hours=[{0,0} || _ <- lists:seq(1,24)],
+            days=[{0,0} || _ <- lists:seq(1,7)]}.
 
 fieldlen(#spiral.seconds) -> 60;
 fieldlen(#spiral.minutes) -> 60;
@@ -78,42 +82,53 @@ nextfield(#spiral.days)    -> done.
 
 
 totals(Spiral) ->
-    S1 = incr(0,Spiral),
-    {
-        S1#spiral.seconds,
-        S1#spiral.minutes,
-        S1#spiral.hours,
-        S1#spiral.days
-    }.
+    S1 = update_moment(n(), Spiral),
+    {{
+        element(1,lists:split(60,S1#spiral.seconds)),
+        element(1,lists:split(60,S1#spiral.minutes)),
+        element(1,lists:split(24,S1#spiral.hours)),
+        element(1,lists:split(7,S1#spiral.days))
+    }, S1}.
 
 %% @doc Produce the number of entries recorded in the last second.
 %% @spec rep_second(spiral()) -> {moment(), count()}
 rep_second(Spiral) ->
-    {Spiral#spiral.moment, hd(Spiral#spiral.seconds)}.
+    {Spiral#spiral.moment, element(1,hd(Spiral#spiral.seconds))}.
 
 %% @doc Produce the number of entries recorded in the last minute.
 %% @spec rep_minute(spiral()) -> {moment(), count()}
 rep_minute(Spiral) ->
     {Minute,_} = lists:split(60,Spiral#spiral.seconds),
-    {Spiral#spiral.moment, lists:sum(Minute)}.
+    {Spiral#spiral.moment, element(1,sum(Minute))}.
 
 %% @doc Produce the approximate number of entries recorded in the last hour.
 %% @spec rep_hour(spiral()) -> {moment(), count()}
 rep_hour(Spiral) ->
     {Hour,_} = lists:split(60,Spiral#spiral.minutes),
-    {Spiral#spiral.moment, lists:sum(Hour)}.
+    {Spiral#spiral.moment, element(1,sum(Hour))}.
 
 %% @doc Produce the approximate number of entries recorded in the last day.
 %% @spec rep_day(spiral()) -> {moment(), count()}
 rep_day(Spiral) ->
     {Day,_} = lists:split(24,Spiral#spiral.hours),
-    {Spiral#spiral.moment, lists:sum(Day)}.
+    {Spiral#spiral.moment, element(1,sum(Day))}.
 
 %% @doc Produce the approximate number of entries recorded in the last week.
 %% @spec rep_week(spiral()) -> {moment(), count()}
 rep_week(Spiral) ->
     {Week,_} = lists:split(7,Spiral#spiral.days),
-    {Spiral#spiral.moment, lists:sum(Week)}.
+    {Spiral#spiral.moment, element(1,sum(Week))}.
+
+
+%% @doc Count the totals in a list of pairs {Sum,Count} tuples
+sum(L) ->
+    sum(L, 0, 0).
+    
+    sum([], Sum, Count) ->
+        {Sum, Count};
+    sum([{S,C}|L], AccS, AccC) ->
+        sum(L, AccS+S, AccC+C).
+
 
 %% @doc Add N to the counter of events, as recently as possible.
 %% @spec incr(count(), spiral()) -> spiral()
@@ -123,24 +138,25 @@ incr(N, Spiral) -> incr(N,n(),Spiral).
 %% @spec incr(count(), moment(), spiral()) -> spiral()
 incr(N, Moment, Spiral) when Spiral#spiral.moment =:= Moment ->
     % common case -- updates for "now"
-    Spiral#spiral{seconds=[hd(Spiral#spiral.seconds)+N|
+    {S,C} = hd(Spiral#spiral.seconds),
+    Spiral#spiral{seconds=[{S+N,C+1}|
                            tl(Spiral#spiral.seconds)]};
 incr(_N, Moment, Spiral) when Spiral#spiral.moment - Moment > 60 ->
-    Spiral; % updates more than a minute old are dropped! whee!
+    update_moment(Moment, Spiral);
 incr(N, Moment, Spiral) ->
     S1 = update_moment(Moment, Spiral),
     {Front,Back} = lists:split(S1#spiral.moment - Moment,
                                S1#spiral.seconds),
-    S1#spiral{seconds=Front ++ [hd(Back)+N|tl(Back)]}.
+    {S,C} = hd(Back),
+    S1#spiral{seconds=Front ++ [{S+N,C+1}|tl(Back)]}.
+
 
 update_moment(Moment, Spiral) when Moment =< Spiral#spiral.moment ->
     Spiral;
 update_moment(Moment, Spiral) when Moment - Spiral#spiral.moment > 36288000 ->
     fresh(Moment);
 update_moment(Moment, Spiral) ->
-    update_moment(Moment, push(0, Spiral#spiral{
-                                    moment=Spiral#spiral.moment+1},
-                               #spiral.seconds)).
+    update_moment(Moment, push({0,0}, Spiral#spiral{moment=Spiral#spiral.moment+1}, #spiral.seconds)).
 
 getfield(Spiral,Field)   -> element(Field, Spiral).
 setfield(Spiral,X,Field) -> setelement(Field, Spiral, X).
@@ -153,7 +169,7 @@ push(N, Spiral, Field) ->
     case length(Full) of
         Double ->
             {Keep, _Past} = lists:split(fieldlen(Field), Full),
-            push(lists:sum(Keep),setfield(Spiral,Keep,Field),nextfield(Field));
+            push(sum(Keep),setfield(Spiral,Keep,Field),nextfield(Field));
         _ ->
             setfield(Spiral,Full,Field)
     end.

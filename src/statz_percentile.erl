@@ -24,7 +24,7 @@
 %% This code only needs to maintain counters for a sample of 100-150 numbers, compared to
 %% all data for the usual algorithms.
 
--module(percentile).
+-module(statz_percentile).
 
 -export([
     new/0,
