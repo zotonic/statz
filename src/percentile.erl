@@ -74,14 +74,16 @@ update(Value, State) ->
                     case length(State#state.new_nums) < ?TREND_SIZE of
                         true ->
                             State1 = State#state{
-                                high_trending=HighTrending,
                                 n_events=NEvents,
+                                nums=incr_below(Value, State#state.nums),
+                                high_trending=HighTrending,
                                 new_nums=incr(Value, State#state.new_nums)
                             };
                         false ->
                             State1 = State#state{
-                                high_trending=HighTrending,
-                                n_events=NEvents
+                                n_events=NEvents,
+                                nums=incr_below(Value, State#state.nums),
+                                high_trending=HighTrending
                             }
                     end,
                     case length(State1#state.new_nums) of
