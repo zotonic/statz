@@ -128,7 +128,7 @@ percentile(State) ->
     end.
 
     percentile_1(State) ->
-        Target = erlang:trunc(State#state.n_events * State#state.percentile),
+        Target = erlang:trunc((State#state.n_events - State#state.n_above_max) * State#state.percentile),
         find_percentile(Target, State#state.nums).
     
     % When we don't find the target then our algorithm above was wrong.
