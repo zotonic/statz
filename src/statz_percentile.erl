@@ -140,6 +140,10 @@ percentile(State) ->
 
 new_high_values(#state{high_trending=false} = State) ->
     State;
+new_high_values(#state{nums=[]} = State) ->
+    State;
+new_high_values(#state{new_nums=[]} = State) ->
+    State;
 new_high_values(State) ->
     {_,LastBelow} = lists:last(State#state.nums),
     [{NewHighVal,NewHighBelow}|NewNumsBelow] = zip_below(LastBelow, lists:sort(State#state.new_nums), []),
