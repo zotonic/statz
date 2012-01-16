@@ -124,7 +124,7 @@ update(Value, State) ->
 percentile(State) ->
     case length(State#state.nums) < ?SAMPLE_SIZE of
         true -> percentile_1(init_below(State));
-        false -> percentile_1(State)
+        false -> percentile_1(new_high_values(State))
     end.
 
     percentile_1(State) ->
@@ -138,6 +138,8 @@ percentile(State) ->
         find_percentile(Target, Ns).
 
 
+new_high_values(#state{high_trending=false} = State) ->
+    State;
 new_high_values(State) ->
     {_,LastBelow} = lists:last(State#state.nums),
     [{NewHighVal,NewHighBelow}|NewNumsBelow] = zip_below(LastBelow, lists:sort(State#state.new_nums), []),
